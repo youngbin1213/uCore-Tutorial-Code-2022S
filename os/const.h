@@ -15,7 +15,7 @@ enum {
 // for use by the kernel and user pages
 // from physical address 0x80000000 to PHYSTOP.
 #define KERNBASE 0x80200000L
-#define PHYSTOP (0x80000000 + 128 * 1024 * 1024) // we have 128M memroy
+#define PHYSTOP (0x80000000 + 128 * 1024 * 1024) // we have 128M memroy ,the "we" means kernel
 
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by
