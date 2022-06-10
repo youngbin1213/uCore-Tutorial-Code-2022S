@@ -52,10 +52,13 @@ pte_t *walk(pagetable_t pagetable, uint64 va, int alloc)
 		panic("walk");
 
 	for (int level = 2; level > 0; level--) {
+		//pte is gotten indexs of va 
 		pte_t *pte = &pagetable[PX(level, va)];
 		if (*pte & PTE_V) {
+			// page exists 
 			pagetable = (pagetable_t)PTE2PA(*pte);
 		} else {
+			// page not exist then alloc page
 			if (!alloc || (pagetable = (pde_t *)kalloc()) == 0)
 				return 0;
 			memset(pagetable, 0, PGSIZE);
