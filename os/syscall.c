@@ -5,6 +5,7 @@
 #include "timer.h"
 #include "trap.h"
 #include "proc.h"
+#include "vm.h"
 
 uint64 sys_write(int fd, uint64 va, uint len)
 {
@@ -61,6 +62,13 @@ uint64 sys_gettimeofday(TimeVal *val, int _tz) // TODO: implement sys_gettimeofd
 /*
 * LAB1: you may need to define sys_task_info here
 */
+uint64 sys_mmap(void*start,uint64 len,int port,int flag,int fd){
+
+	// should return va address!!!
+	// input start is only a key !!!!!
+	uint64 ret = usermmap(curr_proc()->pagetable,start, len, port, flag, fd);
+	return ret;
+}
 
 uint64 sys_task_info(TaskInfo*cur_task_info,TaskInfo* aim_task_info){
 	// va to pa
@@ -85,6 +93,12 @@ uint64 sys_count_taskinfo(TaskInfo*cur_task_info,TimeVal*start_time,int id){
 
 	return 0;
 
+}
+
+uint64 sys_munmap(void*start,uint64 len){
+
+	
+	return 0;
 }
 
 extern char trap_page[];
@@ -121,9 +135,15 @@ void syscall()
 	case SYSCALL_TASK_INFO:
 		ret = sys_task_info(cur_task_info,(TaskInfo*)args[0]);
 		break;
+	case SYS_mmap:
+		ret = sys_mmap((void*)args[0],args[1],(int)args[2],(int)args[3],(int)args[4]);
+		break;
 	/*
 	* LAB1: you may need to add SYS_taskinfo case here
 	*/
+	case SYS_munmap:
+		ret = sys_munmap((void*)args[0],args[1]);
+		break;
 	default:
 		ret = -1;
 		errorf("unknown syscall %d", id);

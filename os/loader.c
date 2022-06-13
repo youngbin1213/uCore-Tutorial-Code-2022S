@@ -26,6 +26,8 @@ void loader_init()
 pagetable_t bin_loader(uint64 start, uint64 end, struct proc *p)
 {
 	pagetable_t pg = uvmcreate();
+	infof("start address(physical address) %p  and end address (physical address is %p",start,end);
+	// mapping trapframe (uservec and userret code)
 	if (mappages(pg, TRAPFRAME, PGSIZE, (uint64)p->trapframe,
 		     PTE_R | PTE_W) < 0) {
 		panic("mappages fail");
@@ -40,12 +42,15 @@ pagetable_t bin_loader(uint64 start, uint64 end, struct proc *p)
 	}
 	end = PGROUNDUP(end);
 	uint64 length = end - start;
+	infof("so length of app page length is %p",length);
 	if (mappages(pg, BASE_ADDRESS, length, start,
 		     PTE_U | PTE_R | PTE_W | PTE_X) != 0) {
 		panic("mappages fail");
 	}
 	p->pagetable = pg;
 	uint64 ustack_bottom_vaddr = BASE_ADDRESS + length + PAGE_SIZE;
+	infof("so length of user stack bottom vaddr  is %p",ustack_bottom_vaddr);
+
 	if (USTACK_SIZE != PAGE_SIZE) {
 		// Fix in ch5
 		panic("Unsupported");
@@ -56,6 +61,7 @@ pagetable_t bin_loader(uint64 start, uint64 end, struct proc *p)
 	p->trapframe->epc = BASE_ADDRESS;
 	p->trapframe->sp = p->ustack + USTACK_SIZE;
 	p->max_page = PGROUNDUP(p->ustack + USTACK_SIZE - 1) / PAGE_SIZE;
+	infof("app base address is %p,app max address is %p",BASE_ADDRESS,BASE_ADDRESS+p->max_page*PAGE_SIZE);
 	return pg;
 }
 
