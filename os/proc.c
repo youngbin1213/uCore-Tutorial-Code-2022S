@@ -3,12 +3,9 @@
 #include "loader.h"
 #include "trap.h"
 #include "vm.h"
-<<<<<<< HEAD
 #include "queue.h"
 
-=======
 #include "time.h"
->>>>>>> ch4
 struct proc pool[NPROC];
 struct TaskInfo task_info_pool[NPROC];
 struct TimeVal start_time_pool[NPROC];
