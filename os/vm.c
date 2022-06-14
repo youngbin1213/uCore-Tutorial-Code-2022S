@@ -149,8 +149,8 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
-// Optionally free the physical memory.
 void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+// Optionally free the physical memory.
 {
 	uint64 a;
 	pte_t *pte;
@@ -406,7 +406,7 @@ uint64 usermmap(pagetable_t pagetable,void*start,uint64 len,int port,int flag,in
 		
 		uint64 pa = (uint64)kalloc();
 		if(mappages(pagetable,a,PAGE_SIZE,pa,PTE_V|PTE_U|port)<0){
-			// kfree(pagetable);
+			kfree((void*)pa);
 			errorf("usermmap: mapppages error");
 			return -1;
 		}

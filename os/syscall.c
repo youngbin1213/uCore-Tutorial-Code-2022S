@@ -90,6 +90,14 @@ uint64 sys_mmap(void*start,uint64 len,int port,int flag,int fd){
 	// should return va address!!!
 	// input start is only a key !!!!!
 	uint64 ret = usermmap(curr_proc()->pagetable,start, len, port, flag, fd);
+	if(ret==0){
+		// uint64 npage = (len+PAGE_SIZE-1)/PAGE_SIZE;
+		// reset max page  ,max page does not mean how many pages os has alloced to app ,
+		// but mean the max virtual address's page num
+		if(curr_proc()->max_page < (((uint64)start+len+PAGE_SIZE-1)/PAGE_SIZE)){
+			curr_proc()->max_page = ((uint64)start+len+PAGE_SIZE-1)/PAGE_SIZE;
+		}
+	}
 	return ret;
 }
 
@@ -143,13 +151,18 @@ uint64 sys_wait(int pid, uint64 va)
 uint64 sys_spawn(uint64 va)
 {
 	// TODO: your job is to complete the sys call
-	return -1;
+	// va but here is kernel!!!
+	
+	// printf("sys_spawn:name is !! id is  %s",va);
+
+	return kspawn(va);
 }
 
 uint64 sys_set_priority(long long prio){
     // TODO: your job is to complete the sys call
     return -1;
 }
+
 
 
 extern char trap_page[];

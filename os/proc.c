@@ -210,6 +210,8 @@ int exec(char *name)
 	if (id < 0)
 		return -1;
 	struct proc *p = curr_proc();
+	//before start  sub process has no page so delete all 
+	// jusk like init  
 	uvmunmap(p->pagetable, 0, p->max_page, 1);
 	p->max_page = 0;
 	loader(id, p);
@@ -266,4 +268,36 @@ void exit(int code)
 		}
 	}
 	sched();
+}
+
+uint64 kspawn(uint64 va){
+	char str[MAX_STR_LEN];
+	struct proc *p = curr_proc();
+
+	for(int i=0;i<MAX_STR_LEN;i++){
+		copyinstr(p->pagetable,str+i,va+i,1);
+		if(str[i]=='\0'){
+			break;
+		}
+	}
+
+	int id = get_id_by_name(str);
+
+	if(id<0)return -1;
+	struct proc *np;
+
+	// Allocate process.
+	if ((np = allocproc()) == 0) {
+		errorf("kspawn : allocproc\n");
+		return -1;
+	}
+	np->max_page = 0;
+	np->parent = p;
+	np->state = RUNNABLE;
+	add_task(np);
+
+	loader(id,np);
+
+
+	return np->pid;
 }

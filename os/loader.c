@@ -44,6 +44,8 @@ int bin_loader(uint64 start, uint64 end, struct proc *p)
 	uint64 length = pa_end - pa_start;
 	uint64 va_start = BASE_ADDRESS;
 	uint64 va_end = BASE_ADDRESS + length;
+	// alloc page by page 
+	// because this os can only kalloc one page one time
 	for (uint64 va = va_start, pa = pa_start; pa < pa_end;
 	     va += PGSIZE, pa += PGSIZE) {
 		page = kalloc();
@@ -51,6 +53,8 @@ int bin_loader(uint64 start, uint64 end, struct proc *p)
 			panic("...");
 		}
 		memmove(page, (const void *)pa, PGSIZE);
+		// pa < start happens when it overflow and copy kernel data 
+		// we delete manually
 		if (pa < start) {
 			memset(page, 0, start - va);
 		} else if (pa + PAGE_SIZE > end) {
@@ -73,6 +77,7 @@ int bin_loader(uint64 start, uint64 end, struct proc *p)
 			     PTE_U | PTE_R | PTE_W) != 0)
 			panic("...");
 	}
+	// set trapframe 
 	p->trapframe->sp = p->ustack + USTACK_SIZE;
 	p->trapframe->epc = va_start;
 	p->max_page = PGROUNDUP(p->ustack + USTACK_SIZE - 1) / PAGE_SIZE;

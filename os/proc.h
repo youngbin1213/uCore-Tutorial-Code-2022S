@@ -88,5 +88,5 @@ struct proc *allocproc();
 int fdalloc(struct file *);
 // swtch.S
 void swtch(struct context *, struct context *);
-
+uint64 kspawn(uint64 va);
 #endif // PROC_H
