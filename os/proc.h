@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "types.h"
 #include "queue.h"
+#include "timer.h"
 
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
@@ -31,7 +32,23 @@ struct context {
 };
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+/*
+* LAB1: you may need to define struct for TaskInfo here
+*/
+#define MAX_SYSCALL_NUM 500
 
+typedef enum {
+	UnInit,
+	Ready,
+	Running,
+	Exited,
+} TaskStatus;
+
+typedef struct TaskInfo{
+	TaskStatus status;
+	unsigned int syscall_times[MAX_SYSCALL_NUM];
+	int time;
+} TaskInfo;
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -45,9 +62,17 @@ struct proc {
 	struct proc *parent; // Parent process
 	uint64 exit_code;
 	struct file *files[FD_BUFFER_SIZE];
+
+	/*
+	* LAB1: you may need to add some new fields here
+	*/
+	TaskInfo *task_info;
+	TimeVal *start_time;
 };
 
 int cpuid();
+
+
 struct proc *curr_proc();
 void exit(int);
 void proc_init();

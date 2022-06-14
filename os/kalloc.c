@@ -22,6 +22,7 @@ void freerange(void *pa_start, void *pa_end)
 
 void kinit()
 {
+	// kernel code stop physical address PHYSTOP = 0x88000000
 	freerange(ekernel, (void *)PHYSTOP);
 }
 
@@ -29,6 +30,7 @@ void kinit()
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
+// free page !!!!!!
 void kfree(void *pa)
 {
 	struct linklist *l;
@@ -45,7 +47,8 @@ void kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *kalloc()
+// allocate page or more suitable alloc physical address this function is just used by creating page!!!!!!!!!!!
+void *kalloc(void)
 {
 	struct linklist *l;
 	l = kmem.freelist;
