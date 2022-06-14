@@ -159,6 +159,7 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 	for (a = va; a < va + npages * PGSIZE; a += PGSIZE) {
 		if ((pte = walk(pagetable, a, 0)) == 0)
 			continue;
+		debugf("begin to unmap %p",a);
 		if ((*pte & PTE_V) != 0) {
 			if (PTE_FLAGS(*pte) == PTE_V)
 				panic("uvmunmap: not a leaf");
@@ -167,6 +168,8 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 				kfree((void *)pa);
 			}
 		}
+		debugf("success to unmap %p",a);
+
 		*pte = 0;
 	}
 }
@@ -348,27 +351,30 @@ uint64 usermmap(pagetable_t pagetable,void*start,uint64 len,int port,int flag,in
 
 	// len may larger than PAGE_SIZE
 	uint64 npage = (len+PAGE_SIZE-1)/PAGE_SIZE;
+	port  = port << 1;
+
 	for(uint64 a=va ;a<va+npage*PAGE_SIZE ; a+=PAGE_SIZE){
 		// walk return == 0 means that va has been alloced some times ago
 		debugf("now va is %p,begin to check whether has been alloced ",a);
-		if(walk(pagetable,a,0)!=0){
-			errorf("usermmap: va %p has benn alloced!",a);
+		if(walkaddr(pagetable,a)!=0){
+			errorf("usermmap: va %p has been alloced, pa is %p",a,walk(pagetable,a,0));
 			return -1;
 		}
 		debugf("now va is %p, it has not been alloc!!!",a);
 
-		pagetable_t pa = usrmapcreate(PAGE_SIZE);
+		// pagetable_t pa = usrmapcreate(PAGE_SIZE);
 		// uint64 last = PGROUNDDOWN(va + size - 1); 
 		//align va = pa ,may some error !!!!!
 		// infof("maxva is %p",MAXVA);
 		// infof("virtual address is %p and pagetable is %p,pa is %p",a,pagetable,pa);
 		
-		port  = port << 1;
-		if(mappages(pagetable,a,len,(uint64)pa,PTE_V|PTE_U|port)<0){
+		uint64 pa = (uint64)kalloc();
+		if(mappages(pagetable,a,PAGE_SIZE,pa,PTE_V|PTE_U|port)<0){
 			// kfree(pagetable);
 			errorf("usermmap: mapppages error");
 			return -1;
 		}
+		debugf("success map va %p to pa %p,walk result is %p",a,pa,walkaddr(pagetable,a));
 	}
 	
 	
@@ -377,62 +383,25 @@ uint64 usermmap(pagetable_t pagetable,void*start,uint64 len,int port,int flag,in
 
 
 
-void freewalkitem(pagetable_t pagetable ,uint64 va){
 
-	for(int level=2;level>0;level--){
-
-		pte_t *pte = &pagetable[PX(level, va)];
-		if (*pte & PTE_V) {
-			// page exists 
-			*pagetable[PX(level, va)]=0;
-			pagetable = (pagetable_t)PTE2PA(*pte);
-		}else{
-			errorf("freewalkitem: error page");
-			return ;
-		}
-
-	}
-
-
-}
-
-uint64 munmap(pagetable_t pagetable,void*start,uint len){
+uint64 mmunmap(pagetable_t pagetable,void*start,uint len){
 	
-	pte_t *pte;
+	// pte_t *pte;
 	uint64 va = (uint64)start;
 
 	if ((va % PGSIZE) != 0){
 		errorf("munmap: not aligned");
 		return -1;
-
 	}
 	int npage = (len+PAGE_SIZE-1)/PAGE_SIZE;
 
 	uint64 res = 0;
-	for(uint64 a = va; a<va+npage*PAGE_SIZE; a+=PAGE_SIZE){
-		if((pte=walk(pagetable,a,0))==0){
-			res=-1;
-			continue;
+	for(uint64 a=va ;a<va+npage*PAGE_SIZE ; a+=PAGE_SIZE){
+		if(walkaddr(pagetable,a)==0){
+			return -1;
 		}
-		if ((*pte & PTE_V) != 0) {
-			if (PTE_FLAGS(*pte) == PTE_V)
-			{
-				res=-1;
-				continue;
-			}
-			uint64 pa = PTE2PA(*pte);
-			kfree((void *)pa);
+		uvmunmap(pagetable,a,1,1);
+
 		}
-
-	}
-
-	// todo free pagetable
-	for(uint64 a = va; a<va+npage*PAGE_SIZE; a+=PAGE_SIZE){
-		// int idx = PX(2, a);
-		freewalkitem(pagetable,a);
-	}
-
-
-
 	return res;
 }

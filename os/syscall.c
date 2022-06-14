@@ -9,13 +9,13 @@
 
 uint64 sys_write(int fd, uint64 va, uint len)
 {
-	debugf("sys_write fd = %d va = %x, len = %d", fd, va, len);
+	// debugf("sys_write fd = %d va = %x, len = %d", fd, va, len);
 	if (fd != STDOUT)
 		return -1;
 	struct proc *p = curr_proc();
 	char str[MAX_STR_LEN];
 	int size = copyinstr(p->pagetable, str, va, MIN(len, MAX_STR_LEN));
-	debugf("size = %d", size);
+	// debugf("size = %d", size);
 	for (int i = 0; i < size; ++i) {
 		console_putchar(str[i]);
 	}
@@ -97,8 +97,8 @@ uint64 sys_count_taskinfo(TaskInfo*cur_task_info,TimeVal*start_time,int id){
 
 uint64 sys_munmap(void*start,uint64 len){
 
-	
-	return 0;
+	uint64 ret = mmunmap(curr_proc()->pagetable,start,len);
+	return ret;
 }
 
 extern char trap_page[];
@@ -142,6 +142,7 @@ void syscall()
 	* LAB1: you may need to add SYS_taskinfo case here
 	*/
 	case SYS_munmap:
+		// ret =0;
 		ret = sys_munmap((void*)args[0],args[1]);
 		break;
 	default:
