@@ -160,6 +160,7 @@ uint64 sys_spawn(uint64 va)
 
 uint64 sys_set_priority(long long prio){
     // TODO: your job is to complete the sys call
+	if(prio<2)return -1;
 	curr_proc()->pro_level = (int)prio ; 
 	// printf("now pro level is %d\n",curr_proc()->pro_level);
     return -1;
