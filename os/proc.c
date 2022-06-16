@@ -4,6 +4,7 @@
 #include "trap.h"
 #include "vm.h"
 #include "queue.h"
+#include "proc_queue.h"
 
 #include "time.h"
 struct proc pool[NPROC];
@@ -15,7 +16,7 @@ __attribute__((aligned(4096))) char trapframe[NPROC][TRAP_PAGE_SIZE];
 extern char boot_stack_top[];
 struct proc *current_proc;
 struct proc idle;
-struct queue task_queue;
+struct proc_queue task_queue;
 
 int threadid()
 {
@@ -45,7 +46,7 @@ void proc_init()
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = IDLE_PID;
 	current_proc = &idle;
-	init_queue(&task_queue);
+	init_proc_queue(&task_queue);
 }
 
 int allocpid()
@@ -56,7 +57,7 @@ int allocpid()
 
 struct proc *fetch_task()
 {
-	int index = pop_queue(&task_queue);
+	int index = pop_proc_queue(&task_queue,pool);
 	if (index < 0) {
 		debugf("No task to fetch\n");
 		return NULL;
@@ -64,11 +65,20 @@ struct proc *fetch_task()
 	debugf("fetch task %d(pid=%d) to task queue\n", index, pool[index].pid);
 	return pool + index;
 }
+void update_proc_stride(struct proc *p){
 
+	int step = BIG_STRIDE/(p->pro_level);
+
+	p->stride =(p->stride)+step;
+	// printf("pid is %d stride is  %d ,prolevel is %d\n",p->pid,p->stride,p->pro_level);
+
+}
 void add_task(struct proc *p)
 {
-	push_queue(&task_queue, p - pool);
-	debugf("add task %d(pid=%d) to task queue\n", p - pool, p->pid);
+	//  update current_proc stride
+	update_proc_stride(current_proc);
+	push_proc_queue(&task_queue, p - pool);
+	debugf("add task %d (pid=%d) stride is %d to task queue\n", p - pool, p->pid,p->stride);
 }
 
 // Look in the process table for an UNUSED proc.
@@ -91,6 +101,8 @@ found:
 	p->ustack = 0;
 	p->max_page = 0;
 	p->parent = NULL;
+	p->stride = 0;
+	p->pro_level = 16; 
 	p->exit_code = 0;
 	p->pagetable = uvmcreate((uint64)p->trapframe);
 	memset(&p->context, 0, sizeof(p->context));
@@ -160,6 +172,7 @@ void sched()
 void yield()
 {
 	current_proc->state = RUNNABLE;
+	
 	add_task(current_proc);
 	sched();
 }

@@ -8,6 +8,7 @@
 
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
+#define BIG_STRIDE (65535)
 
 struct file;
 
@@ -68,6 +69,10 @@ struct proc {
 	*/
 	TaskInfo *task_info;
 	TimeVal *start_time;
+
+	long stride;
+	int pro_level;
+
 };
 
 int cpuid();
