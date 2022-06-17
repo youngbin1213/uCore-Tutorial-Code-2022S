@@ -40,6 +40,7 @@ int bin_loader(struct inode *ip, struct proc *p)
 			     PTE_U | PTE_R | PTE_W) != 0)
 			panic("...");
 	}
+	// set trapframe 
 	p->trapframe->sp = p->ustack + USTACK_SIZE;
 	p->trapframe->epc = va_start;
 	p->max_page = PGROUNDUP(p->ustack + USTACK_SIZE - 1) / PAGE_SIZE;

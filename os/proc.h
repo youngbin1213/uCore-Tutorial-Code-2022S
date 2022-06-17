@@ -3,9 +3,12 @@
 
 #include "riscv.h"
 #include "types.h"
+#include "queue.h"
+#include "timer.h"
 
 #define NPROC (512)
 #define FD_BUFFER_SIZE (16)
+#define BIG_STRIDE (65535)
 
 struct file;
 
@@ -30,7 +33,23 @@ struct context {
 };
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+/*
+* LAB1: you may need to define struct for TaskInfo here
+*/
+#define MAX_SYSCALL_NUM 500
 
+typedef enum {
+	UnInit,
+	Ready,
+	Running,
+	Exited,
+} TaskStatus;
+
+typedef struct TaskInfo{
+	TaskStatus status;
+	unsigned int syscall_times[MAX_SYSCALL_NUM];
+	int time;
+} TaskInfo;
 // Per-process state
 struct proc {
 	enum procstate state; // Process state
@@ -43,11 +62,22 @@ struct proc {
 	uint64 max_page;
 	struct proc *parent; // Parent process
 	uint64 exit_code;
-	struct file *files
-		[FD_BUFFER_SIZE]; //File descriptor table, using to record the files opened by the process
+	struct file *files[FD_BUFFER_SIZE];//File descriptor table, using to record the files opened by the process
+
+	/*
+	* LAB1: you may need to add some new fields here
+	*/
+	TaskInfo *task_info;
+	TimeVal *start_time;
+
+	long stride;
+	int pro_level;
+
 };
 
 int cpuid();
+
+
 struct proc *curr_proc();
 void exit(int);
 void proc_init();
@@ -65,5 +95,5 @@ int init_stdio(struct proc *);
 int push_argv(struct proc *, char **);
 // swtch.S
 void swtch(struct context *, struct context *);
-
+uint64 kspawn(uint64 va);
 #endif // PROC_H

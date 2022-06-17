@@ -11,9 +11,12 @@ uint64 get_cycle();
 void timer_init();
 void set_next_timer();
 
-typedef struct {
+typedef struct TimeVal{ // How to process structures in VA?
 	uint64 sec; // 自 Unix 纪元起的秒数
 	uint64 usec; // 微秒数
 } TimeVal;
+
+void kgettimeofday(TimeVal*,int);
+
 
 #endif // TIMER_H

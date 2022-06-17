@@ -290,6 +290,8 @@ static inline void sfence_vma()
 #define PGSHIFT 12 // bits of offset within a page
 
 #define PGROUNDUP(sz) (((sz) + PGSIZE - 1) & ~(PGSIZE - 1))
+// page round down means that get legal page address!!!! 
+// because pagesize is 4096 ,which means that low 12bit is address
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE - 1))
 #define PGALIGNED(a) (((a) & (PGSIZE - 1)) == 0)
 
@@ -310,6 +312,10 @@ static inline void sfence_vma()
 #define PXMASK 0x1FF // 9 bits
 #define PXSHIFT(level) (PGSHIFT + (9 * (level)))
 #define PX(level, va) ((((uint64)(va)) >> PXSHIFT(level)) & PXMASK)
+
+#define USRPMASK 0x7
+#define USERCHECK(port) (USRPMASK & (port))
+#define USERUNCHECK(port) ((port) & ~(USRPMASK))
 
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by

@@ -5,6 +5,8 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "proc.h"
+#include "vm.h"
 
 uint64 console_write(uint64 va, uint64 len)
 {
@@ -117,7 +119,61 @@ static inline uint64 fetchaddr(pagetable_t pagetable, uint64 va)
 	return *addr;
 }
 
-uint64 sys_exec(uint64 path, uint64 uargv)
+
+// TODO: add support for mmap and munmap syscall.
+// hint: read through docstrings in vm.c. Watching CH4 video may also help.
+// Note the return value and PTE flags (especially U,X,W,R)
+/*
+* LAB1: you may need to define sys_task_info here
+*/
+uint64 sys_mmap(void*start,uint64 len,int port,int flag,int fd){
+
+	// should return va address!!!
+	// input start is only a key !!!!!
+	uint64 ret = usermmap(curr_proc()->pagetable,start, len, port, flag, fd);
+	if(ret==0){
+		// uint64 npage = (len+PAGE_SIZE-1)/PAGE_SIZE;
+		// reset max page  ,max page does not mean how many pages os has alloced to app ,
+		// but mean the max virtual address's page num
+		if(curr_proc()->max_page < (((uint64)start+len+PAGE_SIZE-1)/PAGE_SIZE)){
+			curr_proc()->max_page = ((uint64)start+len+PAGE_SIZE-1)/PAGE_SIZE;
+		}
+	}
+	return ret;
+}
+
+uint64 sys_task_info(TaskInfo*cur_task_info,TaskInfo* aim_task_info){
+	// va to pa
+	return copyout(curr_proc()->pagetable,(uint64)aim_task_info,(char*)cur_task_info,sizeof(TaskInfo));
+	// aim_task_info->time = cur_task_info->time;
+	// aim_task_info->status = cur_task_info->status;
+	// for(int i=0;i<MAX_SYSCALL_NUM;i++){
+	// 	aim_task_info->syscall_times[i] = cur_task_info->syscall_times[i];
+
+	// }
+}
+
+uint64 sys_count_taskinfo(TaskInfo*cur_task_info,TimeVal*start_time,int id){
+	if(id>MAX_SYSCALL_NUM){
+		errorf("id %d over SYSCALL_NUM %d",id,MAX_SYSCALL_NUM);
+	}
+
+	cur_task_info->syscall_times[id] +=1;
+	uint64 cycle = get_cycle();
+	uint64 ms = cycle / CPU_FREQ*1000-start_time->sec*1000 + (cycle % CPU_FREQ) * 1000 / CPU_FREQ - start_time->usec/1000;
+	cur_task_info->time = ms;
+
+	return 0;
+
+}
+
+uint64 sys_munmap(void*start,uint64 len){
+
+	uint64 ret = mmunmap(curr_proc()->pagetable,start,len);
+	return ret;
+}
+
+uint64 sys_exec(uint64 path,uint64 uargv)
 {
 	struct proc *p = curr_proc();
 	char name[MAX_STR_LEN];
@@ -145,21 +201,25 @@ uint64 sys_wait(int pid, uint64 va)
 uint64 sys_spawn(uint64 va)
 {
 	// TODO: your job is to complete the sys call
-	return -1;
-}
+	// va but here is kernel!!!
+	
+	// printf("sys_spawn:name is !! id is  %s",va);
 
-uint64 sys_set_priority(long long prio)
-{
-	// TODO: your job is to complete the sys call
-	return -1;
+	return kspawn(va);
 }
-
 uint64 sys_openat(uint64 va, uint64 omode, uint64 _flags)
 {
 	struct proc *p = curr_proc();
 	char path[200];
 	copyinstr(p->pagetable, path, va, 200);
 	return fileopen(path, omode);
+}
+uint64 sys_set_priority(long long prio){
+    // TODO: your job is to complete the sys call
+	if(prio<2)return -1;
+	curr_proc()->pro_level = (int)prio ; 
+	// printf("now pro level is %d\n",curr_proc()->pro_level);
+    return -1;
 }
 
 uint64 sys_close(int fd)
@@ -179,11 +239,34 @@ uint64 sys_close(int fd)
 
 int sys_fstat(int fd,uint64 stat){
 	//TODO: your job is to complete the syscall
-	return -1;
+	// notice stat is a virtual address!!
+	struct proc *p = curr_proc();
+	struct file *f = p->files[fd];
+	
+	if(f==NULL || f->ip==NULL ||f->ip==0){
+		errorf("invalid fd %d", fd);
+		return -1;
+	}
+	struct Stat file_stat ;
+	file_stat.dev = f->ip->dev;
+	file_stat.ino =f->ip->inum;
+	if(f->ip->type==T_DIR)
+		file_stat.mode = DIR;
+	else
+		file_stat.mode = FILE;
+
+	file_stat.nlink = f->ref;
+
+	copyout(p->pagetable, stat, (char*)&file_stat, sizeof(file_stat));
+	return 0;
 }
 
 int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint64 flags){
 	//TODO: your job is to complete the syscall
+	// oldpath and newpath are all virtual address
+	// link at essentially link two file struct to **one** inode!! 
+	if(oldpath==newpath)return -1;
+
 	return -1;
 }
 
@@ -191,6 +274,7 @@ int sys_unlinkat(int dirfd, uint64 name, uint64 flags){
 	//TODO: your job is to complete the syscall
 	return -1;
 }
+
 
 extern char trap_page[];
 
@@ -202,6 +286,14 @@ void syscall()
 			   trapframe->a3, trapframe->a4, trapframe->a5 };
 	tracef("syscall %d args = [%x, %x, %x, %x, %x, %x]", id, args[0],
 	       args[1], args[2], args[3], args[4], args[5]);
+	/*
+	* LAB1: you may need to update syscall counter for task info here
+	*/
+	TaskInfo *cur_task_info = curr_proc()->task_info;
+	//TODO count task info
+	TimeVal* start_time = curr_proc()->start_time;
+	sys_count_taskinfo(cur_task_info,start_time,id);
+
 	switch (id) {
 	case SYS_write:
 		ret = sys_write(args[0], args[1], args[2]);
@@ -249,6 +341,22 @@ void syscall()
 	    ret = sys_unlinkat(args[0],args[1],args[2]);
 	case SYS_spawn:
 		ret = sys_spawn(args[0]);
+		break;
+	case SYS_setpriority:
+		ret = sys_set_priority((long long)args[0]);
+		break;
+	case SYSCALL_TASK_INFO:
+		ret = sys_task_info(cur_task_info,(TaskInfo*)args[0]);
+		break;
+	case SYS_mmap:
+		ret = sys_mmap((void*)args[0],args[1],(int)args[2],(int)args[3],(int)args[4]);
+		break;
+	/*
+	* LAB1: you may need to add SYS_taskinfo case here
+	*/
+	case SYS_munmap:
+		// ret =0;
+		ret = sys_munmap((void*)args[0],args[1]);
 		break;
 	default:
 		ret = -1;

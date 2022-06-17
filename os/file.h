@@ -18,6 +18,7 @@ struct inode {
 	uint size;
 	uint addrs[NDIRECT + 1];
 	// LAB4: You may need to add link count here
+	uint linkcount;
 };
 
 // Defines a file in memory that provides information about the current use of the file and the corresponding inode location
@@ -29,7 +30,15 @@ struct file {
 	struct inode *ip; // FD_INODE
 	uint off;
 };
-
+#define DIR 0x040000
+#define FILE 0x100000
+ struct Stat{
+	uint64 dev; 
+	uint64 ino; 
+	uint32 mode; 
+	uint32 nlink; 
+	uint64 pad[7]; 
+} ;
 //A few specific fd
 enum {
 	STDIN = 0,

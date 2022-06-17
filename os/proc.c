@@ -4,15 +4,19 @@
 #include "trap.h"
 #include "vm.h"
 #include "queue.h"
+#include "proc_queue.h"
 
+#include "time.h"
 struct proc pool[NPROC];
+struct TaskInfo task_info_pool[NPROC];
+struct TimeVal start_time_pool[NPROC];
 __attribute__((aligned(16))) char kstack[NPROC][PAGE_SIZE];
 __attribute__((aligned(4096))) char trapframe[NPROC][TRAP_PAGE_SIZE];
 
 extern char boot_stack_top[];
 struct proc *current_proc;
 struct proc idle;
-struct queue task_queue;
+struct proc_queue task_queue;
 
 int threadid()
 {
@@ -37,11 +41,17 @@ void proc_init()
 		p->state = UNUSED;
 		p->kstack = (uint64)kstack[p - pool];
 		p->trapframe = (struct trapframe *)trapframe[p - pool];
+		p->task_info = (struct TaskInfo *)&task_info_pool[p - pool];
+		p->start_time = (struct TimeVal *)&start_time_pool[p - pool];
+
+		/*
+		* LAB1: you may need to initialize your new fields of proc here
+		*/
 	}
 	idle.kstack = (uint64)boot_stack_top;
 	idle.pid = IDLE_PID;
 	current_proc = &idle;
-	init_queue(&task_queue);
+	init_proc_queue(&task_queue);
 }
 
 int allocpid()
@@ -52,7 +62,7 @@ int allocpid()
 
 struct proc *fetch_task()
 {
-	int index = pop_queue(&task_queue);
+	int index = pop_proc_queue(&task_queue,pool);
 	if (index < 0) {
 		debugf("No task to fetch\n");
 		return NULL;
@@ -61,11 +71,20 @@ struct proc *fetch_task()
 	       pool[index].pid);
 	return pool + index;
 }
+void update_proc_stride(struct proc *p){
 
+	int step = BIG_STRIDE/(p->pro_level);
+
+	p->stride =(p->stride)+step;
+	// printf("pid is %d stride is  %d ,prolevel is %d\n",p->pid,p->stride,p->pro_level);
+
+}
 void add_task(struct proc *p)
 {
-	push_queue(&task_queue, p - pool);
-	debugf("add task %d(pid=%d) to task queue\n", p - pool, p->pid);
+	//  update current_proc stride
+	update_proc_stride(current_proc);
+	push_proc_queue(&task_queue, p - pool);
+	debugf("add task %d (pid=%d) stride is %d to task queue\n", p - pool, p->pid,p->stride);
 }
 
 // Look in the process table for an UNUSED proc.
@@ -88,6 +107,8 @@ found:
 	p->ustack = 0;
 	p->max_page = 0;
 	p->parent = NULL;
+	p->stride = 0;
+	p->pro_level = 16; 
 	p->exit_code = 0;
 	p->pagetable = uvmcreate((uint64)p->trapframe);
 	memset(&p->context, 0, sizeof(p->context));
@@ -96,6 +117,7 @@ found:
 	memset((void *)p->files, 0, sizeof(struct file *) * FD_BUFFER_SIZE);
 	p->context.ra = (uint64)usertrapret;
 	p->context.sp = p->kstack + KSTACK_SIZE;
+	p->task_info->time = -1;
 	return p;
 }
 
@@ -125,6 +147,12 @@ void scheduler()
 				has_proc = 1;
 				tracef("swtich to proc %d", p - pool);
 				p->state = RUNNING;
+				p->task_info->status = Running;
+				if(p->task_info->time==-1){
+
+					p->task_info->time = 0;
+					kgettimeofday(p->start_time,0);
+				}
 				current_proc = p;
 				swtch(&idle.context, &p->context);
 			}
@@ -162,6 +190,7 @@ void sched()
 void yield()
 {
 	current_proc->state = RUNNABLE;
+	
 	add_task(current_proc);
 	sched();
 }
@@ -335,4 +364,36 @@ int fdalloc(struct file *f)
 		}
 	}
 	return -1;
+}
+// kspawn is error here
+uint64 kspawn(uint64 va){
+	char str[MAX_STR_LEN];
+	struct proc *p = curr_proc();
+
+	for(int i=0;i<MAX_STR_LEN;i++){
+		copyinstr(p->pagetable,str+i,va+i,1);
+		if(str[i]=='\0'){
+			break;
+		}
+	}
+	// error id 
+	int id = 1;
+
+	if(id<0)return -1;
+	struct proc *np;
+
+	// Allocate process.
+	if ((np = allocproc()) == 0) {
+		errorf("kspawn : allocproc\n");
+		return -1;
+	}
+	np->max_page = 0;
+	np->parent = p;
+	np->state = RUNNABLE;
+	add_task(np);
+	// error in ch6
+	// bin_loader(id,np);
+
+
+	return np->pid;
 }
