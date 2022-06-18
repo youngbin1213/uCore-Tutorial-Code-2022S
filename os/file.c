@@ -83,8 +83,8 @@ static struct inode *create(char *path, short type)
 		panic("create: ialloc");
 
 	tracef("create dinode and inode type = %d\n", type);
-
 	ivalid(ip);
+	ip->linkcount = 1;
 	iupdate(ip);
 	if (dirlink(dp, path, ip->inum) < 0)
 		panic("create: dirlink");
@@ -103,6 +103,7 @@ int fileopen(char *path, uint64 omode)
 	struct inode *ip;
 	if (omode & O_CREATE) {
 		ip = create(path, T_FILE);
+		printf("path is %s ip ,create a file ,inum is %d\n",path,ip->inum);
 		if (ip == 0) {
 			return -1;
 		}
@@ -153,4 +154,64 @@ uint64 inoderead(struct file *f, uint64 va, uint64 len)
 	if ((r = readi(f->ip, 1, va, f->off, len)) > 0)
 		f->off += r;
 	return r;
+}
+
+
+
+uint64 hdlink(int olddirfd, char* oldpath, int newdirfd, char* newpath, uint64 flags){
+	struct inode* ip,*dp;
+	
+
+	if((ip=namei(oldpath))==0){
+		errorf("hdlink: can not find path's inode !!");
+		return -1;
+	}
+	if (ip->type != T_FILE)
+		panic("unsupported file inode type\n");
+	ivalid(ip);
+	dp = root_dir();
+	ivalid(dp);
+	if (dirlink(dp, newpath, ip->inum) < 0){
+		errorf("hdlink: dirlink");
+		return -1;
+
+	}
+
+	
+	ip->linkcount++;
+	iupdate(ip);
+	iput(ip);
+	iput(dp);
+	return 0;
+
+}
+
+uint64 hdunlink(int dirfd, char* name, uint64 flags){
+
+	struct inode* ip,*dp;
+	
+	if((ip=namei(name))==0){
+		errorf("hdlink: can not find path's inode !!");
+		return -1;
+	}
+	if (ip->type != T_FILE)
+		panic("unsupported file inode type\n");
+	ivalid(ip);
+	dp = root_dir();
+	ivalid(dp);
+	if (dirunlink(dp, ip) < 0){
+		errorf("hdunlink: dirunlink");
+		return -1;
+	}
+
+	
+	// todo ip should be delete if linkcount is zero
+	ip->linkcount--;
+	iupdate(ip);
+	// iupdate(dp);
+
+	iput(ip);
+	iput(dp);
+
+	return 0;
 }

@@ -242,37 +242,56 @@ int sys_fstat(int fd,uint64 stat){
 	// notice stat is a virtual address!!
 	struct proc *p = curr_proc();
 	struct file *f = p->files[fd];
+	struct inode *ip;
 	
 	if(f==NULL || f->ip==NULL ||f->ip==0){
 		errorf("invalid fd %d", fd);
 		return -1;
 	}
+	// copy to stat
 	struct Stat file_stat ;
-	file_stat.dev = f->ip->dev;
-	file_stat.ino =f->ip->inum;
-	if(f->ip->type==T_DIR)
+	ip = f->ip;
+	ivalid(ip);
+	file_stat.dev = ip->dev;
+	file_stat.ino =ip->inum;
+	if(ip->type==T_DIR)
 		file_stat.mode = DIR;
 	else
 		file_stat.mode = FILE;
-
-	file_stat.nlink = f->ref;
+	// should not ref but linkcount
+	file_stat.nlink = ip->linkcount;
 
 	copyout(p->pagetable, stat, (char*)&file_stat, sizeof(file_stat));
 	return 0;
 }
 
-int sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint64 flags){
+uint64 sys_linkat(int olddirfd, uint64 oldpath, int newdirfd, uint64 newpath, uint64 flags){
 	//TODO: your job is to complete the syscall
 	// oldpath and newpath are all virtual address
 	// link at essentially link two file struct to **one** inode!! 
-	if(oldpath==newpath)return -1;
 
-	return -1;
+	if(oldpath==newpath)return -1;
+	struct proc *p = curr_proc();
+
+	char old_path_str[MAX_STR_LEN];
+	char new_path_str[MAX_STR_LEN];
+	copyinstr(p->pagetable, old_path_str, oldpath, MAX_STR_LEN);
+	copyinstr(p->pagetable, new_path_str, newpath, MAX_STR_LEN);
+
+	return hdlink( olddirfd, old_path_str,  newdirfd,new_path_str,  flags);
+
+	
 }
 
-int sys_unlinkat(int dirfd, uint64 name, uint64 flags){
+uint64 sys_unlinkat(int dirfd, uint64 name, uint64 flags){
 	//TODO: your job is to complete the syscall
-	return -1;
+	char path[MAX_STR_LEN];
+	struct proc *p = curr_proc();
+
+	copyinstr(p->pagetable, path, name, MAX_STR_LEN);
+	
+
+	return hdunlink( dirfd,path,flags);
 }
 
 
@@ -339,6 +358,7 @@ void syscall()
 		break;
 	case SYS_unlinkat:
 	    ret = sys_unlinkat(args[0],args[1],args[2]);
+		break;
 	case SYS_spawn:
 		ret = sys_spawn(args[0]);
 		break;

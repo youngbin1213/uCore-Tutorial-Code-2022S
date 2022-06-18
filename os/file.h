@@ -55,5 +55,6 @@ uint64 inodewrite(struct file *, uint64, uint64);
 uint64 inoderead(struct file *, uint64, uint64);
 struct file *stdio_init(int);
 int show_all_files();
-
+uint64 hdlink(int olddirfd, char* oldpath, int newdirfd, char* newpath, uint64 flags);
+uint64 hdunlink(int dirfd, char* name, uint64 flags);
 #endif // FILE_H

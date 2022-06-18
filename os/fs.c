@@ -136,6 +136,7 @@ void iupdate(struct inode *ip)
 	dip = (struct dinode *)bp->data + ip->inum % IPB;
 	dip->type = ip->type;
 	dip->size = ip->size;
+	dip->pad[0]=(short)ip->linkcount;
 	// LAB4: you may need to update link count here
 	memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
 	bwrite(bp);
@@ -168,6 +169,7 @@ static struct inode *iget(uint dev, uint inum)
 	ip->inum = inum;
 	ip->ref = 1;
 	ip->valid = 0;
+	// ip->linkcount = 0;
 	return ip;
 }
 
@@ -189,6 +191,7 @@ void ivalid(struct inode *ip)
 		dip = (struct dinode *)bp->data + ip->inum % IPB;
 		ip->type = dip->type;
 		ip->size = dip->size;
+		ip->linkcount = (uint)dip->pad[0];
 		// LAB4: You may need to get lint count here
 		memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
 		brelse(bp);
@@ -208,7 +211,7 @@ void ivalid(struct inode *ip)
 void iput(struct inode *ip)
 {
 	// LAB4: Unmark the condition and change link count variable name (nlink) if needed
-	if (ip->ref == 1 && ip->valid && 0 /*&& ip->nlink == 0*/) {
+	if (ip->ref == 1 && ip->valid  && ip->linkcount == 0) {
 		// inode has no links and no other references: truncate and free.
 		itrunc(ip);
 		ip->type = 0;
@@ -301,8 +304,8 @@ int readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
 		n = ip->size - off;
 
 	for (tot = 0; tot < n; tot += m, off += m, dst += m) {
-		bp = bread(ip->dev, bmap(ip, off / BSIZE));
 		m = MIN(n - tot, BSIZE - off % BSIZE);
+		bp = bread(ip->dev, bmap(ip, off / BSIZE));
 		if (either_copyout(user_dst, dst,
 				   (char *)bp->data + (off % BSIZE), m) == -1) {
 			brelse(bp);
@@ -360,7 +363,6 @@ struct inode *dirlookup(struct inode *dp, char *name, uint *poff)
 {
 	uint off, inum;
 	struct dirent de;
-
 	if (dp->type != T_DIR)
 		panic("dirlookup not DIR");
 
@@ -429,6 +431,29 @@ int dirlink(struct inode *dp, char *name, uint inum)
 }
 
 // LAB4: You may want to add dirunlink here
+// essentially ,the purpose of dirunlink is to delete from root inode !!!
+int dirunlink(struct inode *dp,struct inode *ip){
+	int off;
+	struct dirent de;
+	de.inum = 0;
+	// Look for an empty dirent.
+	for (off = 0; off < dp->size; off += sizeof(de)) {
+		if (readi(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+			panic("dirlink read");
+		if (de.inum == ip->inum)
+			break;
+	}
+	if(de.inum!=ip->inum){
+		errorf("cannot find path in directory");
+		return -1;
+	}
+	strncpy(de.name, "\0", DIRSIZ);
+	de.inum = 0;
+	// write to hardware
+	if (writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
+		panic("dirlink");
+	return 0;
+}
 
 //Return the inode of the root directory
 struct inode *root_dir()
@@ -439,6 +464,7 @@ struct inode *root_dir()
 }
 
 //Find the corresponding inode according to the path
+// dp not realse!
 struct inode *namei(char *path)
 {
 	int skip = 0;
@@ -450,5 +476,7 @@ struct inode *namei(char *path)
 	struct inode *dp = root_dir();
 	if (dp == 0)
 		panic("fs dumped.\n");
-	return dirlookup(dp, path + skip, 0);
+	struct inode *rs_node = dirlookup(dp, path + skip, 0);
+	iput(dp);
+	return rs_node;
 }
