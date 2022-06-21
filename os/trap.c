@@ -137,7 +137,7 @@ void usertrapret()
 	uint64 satp = MAKE_SATP(curr_proc()->pagetable);
 	uint64 fn = TRAMPOLINE + (userret - trampoline);
 	uint64 trapframe_va = get_thread_trapframe_va(curr_thread()->tid);
-	debugf("return to user @ %p, sp @ %p", trapframe->epc, trapframe->sp);
+	// debugf("return to user @ %p, sp @ %p", trapframe->epc, trapframe->sp);
 	((void (*)(uint64, uint64))fn)(trapframe_va, satp);
 }
 

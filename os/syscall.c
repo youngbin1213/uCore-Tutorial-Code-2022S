@@ -6,6 +6,7 @@
 #include "syscall_ids.h"
 #include "timer.h"
 #include "trap.h"
+#include "srctype.h"
 
 uint64 console_write(uint64 va, uint64 len)
 {
@@ -249,6 +250,45 @@ int sys_waittid(int tid)
 *				for both mutex and semaphore detect, you can also
 *				use this idea or just ignore it.
 */
+int deadlock_detect(  int available[LOCK_POOL_SIZE],
+						 const int allocation[NTHREAD][LOCK_POOL_SIZE],
+						 const int request[NTHREAD][LOCK_POOL_SIZE]){
+	int finish[NTHREAD];
+	memset(finish,0,sizeof(finish));
+
+	while(1){
+		int flag = 0;
+		for(int i=0;i<NTHREAD;i++){
+			if(finish[i]==1)continue;
+			int tflag = 0;
+			for(int ii=0;ii<LOCK_POOL_SIZE;ii++){
+				if(request[i][ii]<=available[ii]){
+					tflag++;
+				}
+			}
+			// when success to run thread i release it's resource that it hold !!
+			if(tflag==LOCK_POOL_SIZE){
+				flag=1;
+				finish[i]= 1;
+				for(int ii=0;ii<LOCK_POOL_SIZE;ii++){
+					available[ii]+=allocation[i][ii];
+				}
+				continue;
+			}
+		}
+		// all finish are set to 1
+		if(flag == 0 )break;
+	}
+	
+
+
+	// deteck whether sequence is exisetd!!!
+	for(int i=0;i<NTHREAD;i++){
+		if(finish[i]==0)return -1;
+	}
+
+	return 1;
+}
 
 int sys_mutex_create(int blocking)
 {
@@ -259,30 +299,60 @@ int sys_mutex_create(int blocking)
 	}
 	// LAB5: (4-1) You may want to maintain some variables for detect here
 	int mutex_id = m - curr_proc()->mutex_pool;
+	curr_proc()->available[LOCK_MASK][mutex_id]++;
+
 	debugf("create mutex %d", mutex_id);
 	return mutex_id;
 }
 
 int sys_mutex_lock(int mutex_id)
 {
-	if (mutex_id < 0 || mutex_id >= curr_proc()->next_mutex_id) {
+
+	struct proc* np = curr_proc();
+	if (mutex_id < 0 || mutex_id >= np->next_mutex_id) {
 		errorf("Unexpected mutex id %d", mutex_id);
 		return -1;
 	}
 	// LAB5: (4-1) You may want to maintain some variables for detect
 	//       or call your detect algorithm here
-	mutex_lock(&curr_proc()->mutex_pool[mutex_id]);
+	struct thread *nt = curr_thread();
+	np->request[LOCK_MASK][nt->tid][mutex_id]++;
+	// printf("before ......\n available is ");
+	// for(int i=0;i<LOCK_POOL_SIZE;i++){
+	// 	printf(" %d ",np->available[LOCK_MASK][i]);
+	// }
+	// printf("\n");
+	if(np->deadlock_dect){
+		if(deadlock_detect(np->available[LOCK_MASK],np->allocation[LOCK_MASK],np->request[LOCK_MASK])==-1)
+			return -0xdead;
+	}
+
+	// printf("after ......\n available is ");
+	// for(int i=0;i<LOCK_POOL_SIZE;i++){
+	// 	printf(" %d ",np->available[LOCK_MASK][i]);
+	// }
+	// printf("\n");
+
+	mutex_lock(&np->mutex_pool[mutex_id]);
+	np->allocation[LOCK_MASK][nt->tid][mutex_id]++;
+	np->available[LOCK_MASK][mutex_id]--;
 	return 0;
 }
 
 int sys_mutex_unlock(int mutex_id)
 {
-	if (mutex_id < 0 || mutex_id >= curr_proc()->next_mutex_id) {
+	struct proc* np = curr_proc();
+
+	if (mutex_id < 0 || mutex_id >= np->next_mutex_id) {
 		errorf("Unexpected mutex id %d", mutex_id);
 		return -1;
 	}
 	// LAB5: (4-1) You may want to maintain some variables for detect here
-	mutex_unlock(&curr_proc()->mutex_pool[mutex_id]);
+	struct thread *nt = curr_thread();
+
+	np->allocation[LOCK_MASK][nt->tid][mutex_id]--;
+	np->available[LOCK_MASK][mutex_id]++;
+	mutex_unlock(&np->mutex_pool[mutex_id]);
 	return 0;
 }
 
@@ -295,12 +365,16 @@ int sys_semaphore_create(int res_count)
 	}
 	// LAB5: (4-2) You may want to maintain some variables for detect here
 	int sem_id = s - curr_proc()->semaphore_pool;
+	curr_proc()->available[SIM_MASK][sem_id]+=res_count;
 	debugf("create semaphore %d", sem_id);
 	return sem_id;
 }
 
 int sys_semaphore_up(int semaphore_id)
 {
+	struct proc* np = curr_proc();
+	struct thread *nt = curr_thread();
+
 	if (semaphore_id < 0 ||
 	    semaphore_id >= curr_proc()->next_semaphore_id) {
 		errorf("Unexpected semaphore id %d", semaphore_id);
@@ -308,18 +382,27 @@ int sys_semaphore_up(int semaphore_id)
 	}
 	// LAB5: (4-2) You may want to maintain some variables for detect here
 	semaphore_up(&curr_proc()->semaphore_pool[semaphore_id]);
+	np->allocation[SIM_MASK][nt->tid][semaphore_id]--;
+	np->available[SIM_MASK][semaphore_id]++;
 	return 0;
 }
 
 int sys_semaphore_down(int semaphore_id)
 {
+	struct proc* np = curr_proc();
 	if (semaphore_id < 0 ||
-	    semaphore_id >= curr_proc()->next_semaphore_id) {
+	    semaphore_id >= np->next_semaphore_id) {
 		errorf("Unexpected semaphore id %d", semaphore_id);
 		return -1;
 	}
 	// LAB5: (4-2) You may want to maintain some variables for detect
 	//       or call your detect algorithm here
+	struct thread *nt = curr_thread();
+
+	np->request[SIM_MASK][nt->tid][semaphore_id]++;
+	if(deadlock_detect(np->available[SIM_MASK],np->allocation[SIM_MASK],np->request[SIM_MASK])==-1)return -0xdead;
+	np->allocation[SIM_MASK][nt->tid][semaphore_id]++;
+	np->available[SIM_MASK][semaphore_id]--;
 	semaphore_down(&curr_proc()->semaphore_pool[semaphore_id]);
 	return 0;
 }
@@ -363,6 +446,12 @@ int sys_condvar_wait(int cond_id, int mutex_id)
 
 // LAB5: (2) you may need to define function enable_deadlock_detect here
 
+int sys_deadlock_detect(){
+
+	curr_proc()->deadlock_dect = 1;
+	return -1;
+}
+
 extern char trap_page[];
 
 void syscall()
@@ -372,8 +461,8 @@ void syscall()
 	uint64 args[6] = { trapframe->a0, trapframe->a1, trapframe->a2,
 			   trapframe->a3, trapframe->a4, trapframe->a5 };
 	if (id != SYS_write && id != SYS_read && id != SYS_sched_yield) {
-		debugf("syscall %d args = [%x, %x, %x, %x, %x, %x]", id,
-		       args[0], args[1], args[2], args[3], args[4], args[5]);
+		// debugf("syscall %d args = [%x, %x, %x, %x, %x, %x]", id,
+		//        args[0], args[1], args[2], args[3], args[4], args[5]);
 	}
 	switch (id) {
 	case SYS_write:
@@ -453,6 +542,9 @@ void syscall()
 	case SYS_condvar_wait:
 		ret = sys_condvar_wait(args[0], args[1]);
 		break;
+	case SYS_enable_deadlock_detect:
+		ret = sys_deadlock_detect();
+		break;
 	// LAB5: (2) you may need to add case SYS_enable_deadlock_detect here
 	default:
 		ret = -1;
@@ -460,6 +552,6 @@ void syscall()
 	}
 	curr_thread()->trapframe->a0 = ret;
 	if (id != SYS_write && id != SYS_read && id != SYS_sched_yield) {
-		debugf("syscall %d ret %d", id, ret);
+		// debugf("syscall %d ret %d", id, ret);
 	}
 }
