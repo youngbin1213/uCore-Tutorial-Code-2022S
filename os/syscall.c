@@ -400,7 +400,10 @@ int sys_semaphore_down(int semaphore_id)
 	struct thread *nt = curr_thread();
 
 	np->request[SIM_MASK][nt->tid][semaphore_id]++;
-	if(deadlock_detect(np->available[SIM_MASK],np->allocation[SIM_MASK],np->request[SIM_MASK])==-1)return -0xdead;
+	if(np->deadlock_dect){
+		if(deadlock_detect(np->available[SIM_MASK],np->allocation[SIM_MASK],np->request[SIM_MASK])==-1)
+			return -0xdead;
+	}
 	np->allocation[SIM_MASK][nt->tid][semaphore_id]++;
 	np->available[SIM_MASK][semaphore_id]--;
 	semaphore_down(&curr_proc()->semaphore_pool[semaphore_id]);
